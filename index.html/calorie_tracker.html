@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>熱量赤字追蹤器</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f8f5;
+    --surface: #ffffff;
+    --surface2: #f1f0eb;
+    --text: #1a1a18;
+    --text2: #6b6a65;
+    --text3: #a0a09a;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --green: #1D9E75;
+    --green-bg: #EAF3DE;
+    --green-text: #3B6D11;
+    --red: #E24B4A;
+    --red-bg: #FCEBEB;
+    --red-text: #A32D2D;
+    --blue: #378ADD;
+    --purple: #7B5EA7;
+    --purple-bg: #EFE9F8;
+    --purple-text: #4B2D80;
+    --amber: #BA7517;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #242422;
+      --surface2: #2c2c2a;
+      --text: #f0efea;
+      --text2: #a0a09a;
+      --text3: #6b6a65;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --green-bg: #17341f;
+      --green-text: #9FE1CB;
+      --red-bg: #2e1111;
+      --red-text: #F7C1C1;
+      --purple-bg: #2a1f3d;
+      --purple-text: #C9B8E8;
+    }
+  }
+  body { font-family: -apple-system, 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 1.5rem; }
+  .month-nav { display: flex; align-items: center; gap: 12px; }
+  .month-label { font-size: 18px; font-weight: 500; min-width: 130px; text-align: center; }
+  .goal-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text2); background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 6px 14px; }
+  .goal-row input { width: 80px; font-size: 14px; border: none; background: transparent; color: var(--text); text-align: center; font-weight: 500; outline: none; }
+  button { background: var(--surface); border: 0.5px solid var(--border2); border-radius: var(--radius-md); padding: 6px 14px; cursor: pointer; color: var(--text); font-size: 14px; font-family: inherit; transition: background 0.15s; }
+  button:hover { background: var(--surface2); }
+  button:active { transform: scale(0.98); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .metric-card { background: var(--surface2); border-radius: var(--radius-md); padding: 1rem; }
+  .metric-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .metric-value { font-size: 20px; font-weight: 500; }
+  .metric-value .unit { font-size: 12px; color: var(--text3); font-weight: 400; }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .purple { color: var(--purple); }
+  .section-title { font-size: 13px; font-weight: 500; color: var(--text2); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; margin-top: 1.5rem; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .chart-wrap { position: relative; width: 100%; height: 230px; margin-bottom: 1.5rem; }
+  .quick-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .quick-panel-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 10px; }
+  .quick-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .quick-row select, .quick-row input[type=number] { font-size: 14px; border: 0.5px solid var(--border2); border-radius: var(--radius-md); padding: 6px 10px; background: var(--surface2); color: var(--text); font-family: inherit; }
+  .quick-row input[type=number] { width: 120px; }
+  .quick-row .lbl { font-size: 13px; color: var(--text2); white-space: nowrap; }
+  .quick-row button.primary { background: var(--text); color: var(--bg); border-color: transparent; font-weight: 500; }
+  .quick-row button.primary:hover { opacity: 0.85; }
+  .week-summary { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; }
+  .week-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 8px; }
+  .week-stats { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+  .week-stat { color: var(--text); }
+  .week-stat span { font-weight: 500; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .log-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-bottom: 2rem; }
+  .day-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 0.875rem 1rem; transition: border-color 0.15s; }
+  .day-card:hover { border-color: var(--border2); }
+  .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .day-name { font-size: 13px; font-weight: 500; }
+  .day-dow { font-size: 11px; color: var(--text3); }
+  .input-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .input-group label { font-size: 11px; color: var(--text2); white-space: nowrap; width: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 3px; }
+  .input-group input { flex: 1; font-size: 13px; border: 0.5px solid var(--border2); border-radius: var(--radius-md); padding: 4px 7px; background: var(--surface2); color: var(--text); font-family: inherit; outline: none; transition: border-color 0.15s; }
+  .input-group input:focus { border-color: var(--blue); }
+  .input-group .unit { font-size: 11px; color: var(--text3); white-space: nowrap; }
+  .net-row { font-size: 11px; color: var(--text2); margin-top: 4px; margin-bottom: 2px; }
+  .net-row span { font-weight: 500; color: var(--text); }
+  .deficit-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-md); margin-top: 6px; display: inline-block; }
+  .deficit-badge.surplus { background: var(--red-bg); color: var(--red-text); }
+  .deficit-badge.deficit { background: var(--green-bg); color: var(--green-text); }
+  .deficit-badge.neutral { background: var(--surface2); color: var(--text2); }
+  .formula-hint { font-size: 12px; color: var(--text3); background: var(--surface2); border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 1.5rem; line-height: 1.8; }
+  .formula-hint strong { color: var(--text2); }
+  .save-notice { font-size: 12px; color: var(--text3); text-align: center; margin-top: 2rem; padding-bottom: 1rem; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { opacity: 0.4; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🥗 熱量赤字追蹤器</h1>
+  <p class="subtitle">記錄每日飲食攝取與運動消耗，確認是否達成熱量赤字目標</p>
+
+  <div class="header-row">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)" aria-label="上個月"><i class="ti ti-chevron-left"></i></button>
+      <span class="month-label" id="monthLabel"></span>
+      <button onclick="changeMonth(1)" aria-label="下個月"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="goal-row">
+      <i class="ti ti-flame" style="color:#BA7517; font-size:16px;"></i>
+      <span>每日目標熱量</span>
+      <input type="number" id="goalInput" value="1800" min="500" max="5000" step="50" oninput="updateAll()">
+      <span>大卡</span>
+    </div>
+  </div>
+
+  <div class="formula-hint">
+    <strong>赤字計算公式：</strong>每日赤字 = 目標熱量 &minus; 飲食攝取 + 運動消耗 &nbsp;｜&nbsp; 正數 = 達成赤字 ✅ &nbsp; 負數 = 超標 ❌
+  </div>
+
+  <div class="metrics" id="metricsArea"></div>
+
+  <div class="section-title">本月每日攝取 vs 目標</div>
+  <div class="legend">
+    <span><span class="legend-dot" style="background:#378ADD;"></span>攝取熱量（達標）</span>
+    <span><span class="legend-dot" style="background:#E24B4A;"></span>攝取熱量（超標）</span>
+    <span><span class="legend-dot" style="background:rgba(123,94,167,0.55);"></span>運動消耗</span>
+    <span><span class="legend-dot" style="background:#aaa; border:1px dashed #888;"></span>目標熱量</span>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="mainChart" role="img" aria-label="本月每日熱量攝取、運動消耗與目標對比圖"></canvas>
+  </div>
+
+  <div class="section-title">快速輸入</div>
+  <div class="quick-panel">
+    <div class="quick-panel-title"><i class="ti ti-edit"></i> 選擇日期並輸入數據</div>
+    <div class="quick-row">
+      <select id="quickDay"></select>
+      <span class="lbl"><i class="ti ti-fork-knife" style="color:#BA7517;"></i> 飲食</span>
+      <input type="number" id="quickCal" placeholder="攝取熱量" min="0" max="9999">
+      <span class="lbl"><i class="ti ti-run" style="color:#7B5EA7;"></i> 運動</span>
+      <input type="number" id="quickExer" placeholder="消耗熱量" min="0" max="9999">
+      <button class="primary" onclick="quickAdd()"><i class="ti ti-plus"></i> 記錄</button>
+    </div>
+  </div>
+
+  <div class="section-title">本月週摘要</div>
+  <div id="weekSummaries"></div>
+
+  <div class="section-title">每日詳細記錄</div>
+  <div class="log-grid" id="logGrid"></div>
+
+  <p class="save-notice"><i class="ti ti-device-floppy"></i> 資料自動儲存於瀏覽器，關閉後重新開啟仍可繼續記錄</p>
+</div>
+
+<script>
+const MONTH_NAMES = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const DAY_NAMES = ['日','一','二','三','四','五','六'];
+const WEEK_DAY_FULL = ['週日','週一','週二','週三','週四','週五','週六'];
+
+let now = new Date();
+let viewYear = now.getFullYear();
+let viewMonth = now.getMonth();
+let chart = null;
+
+function storageKey() { return `calTracker2_${viewYear}_${viewMonth}`; }
+function getData() { try { return JSON.parse(localStorage.getItem(storageKey()) || '{}'); } catch { return {}; } }
+function saveData(d) { localStorage.setItem(storageKey(), JSON.stringify(d)); }
+function getGoal() { return parseInt(document.getElementById('goalInput').value) || 1800; }
+function getDays() { return new Date(viewYear, viewMonth + 1, 0).getDate(); }
+function dk(d) { return String(d); }
+
+function changeMonth(dir) {
+  viewMonth += dir;
+  if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  updateAll();
+}
+
+function updateAll() {
+  document.getElementById('monthLabel').textContent = `${viewYear} 年 ${MONTH_NAMES[viewMonth]}`;
+  buildQuickSelect();
+  renderMetrics();
+  renderChart();
+  renderWeekSummaries();
+  renderLog();
+}
+
+function buildQuickSelect() {
+  const sel = document.getElementById('quickDay');
+  const days = getDays();
+  const todayD = now.getDate();
+  sel.innerHTML = '';
+  for (let d = 1; d <= days; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    const dow = new Date(viewYear, viewMonth, d).getDay();
+    opt.textContent = `${viewMonth+1}/${d} (${WEEK_DAY_FULL[dow]})`;
+    if (d === todayD && viewYear === now.getFullYear() && viewMonth === now.getMonth()) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function quickAdd() {
+  const d = parseInt(document.getElementById('quickDay').value);
+  const cal = parseInt(document.getElementById('quickCal').value) || 0;
+  const exer = parseInt(document.getElementById('quickExer').value) || 0;
+  if (!cal && !exer) return;
+  const data = getData();
+  if (!data[dk(d)]) data[dk(d)] = {};
+  if (cal > 0) data[dk(d)].cal = cal;
+  if (exer > 0) data[dk(d)].exer = exer;
+  saveData(data);
+  document.getElementById('quickCal').value = '';
+  document.getElementById('quickExer').value = '';
+  updateAll();
+}
+
+function calcDeficit(goal, cal, exer) {
+  return goal - (cal || 0) + (exer || 0);
+}
+
+function renderMetrics() {
+  const goal = getGoal();
+  const days = getDays();
+  const data = getData();
+  let totalCal = 0, totalExer = 0, totalDef = 0, loggedCal = 0, loggedExer = 0, loggedAny = 0;
+  for (let d = 1; d <= days; d++) {
+    const rec = data[dk(d)];
+    if (rec) {
+      if (rec.cal) { totalCal += rec.cal; loggedCal++; }
+      if (rec.exer) { totalExer += rec.exer; loggedExer++; }
+      if (rec.cal || rec.exer) { totalDef += calcDeficit(goal, rec.cal||0, rec.exer||0); loggedAny++; }
+    }
+  }
+  const avgCal = loggedCal ? Math.round(totalCal / loggedCal) : 0;
+  const defTotal = Math.round(totalDef);
+  let wDef = 0, wLogged = 0;
+  const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
+  for (let i = 0; i < 7; i++) {
+    const dd = new Date(startOfWeek); dd.setDate(startOfWeek.getDate() + i);
+    if (dd.getFullYear() === viewYear && dd.getMonth() === viewMonth) {
+      const rec = data[dk(dd.getDate())];
+      if (rec && (rec.cal || rec.exer)) { wDef += calcDeficit(goal, rec.cal||0, rec.exer||0); wLogged++; }
+    }
+  }
+  document.getElementById('metricsArea').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-calendar"></i> 已記錄天數</div>
+      <div class="metric-value">${loggedAny} <span class="unit">/ ${days} 天</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-fork-knife" style="color:#BA7517;"></i> 平均每日攝取</div>
+      <div class="metric-value">${avgCal > 0 ? avgCal.toLocaleString() : '—'} <span class="unit">大卡</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-run" style="color:#7B5EA7;"></i> 本月運動消耗</div>
+      <div class="metric-value purple">${totalExer > 0 ? totalExer.toLocaleString() : '—'} <span class="unit">大卡</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-trending-down"></i> 本月累計赤字</div>
+      <div class="metric-value ${defTotal >= 0 ? 'green' : 'red'}">${loggedAny ? (defTotal >= 0 ? '+' : '') + defTotal.toLocaleString() : '—'} <span class="unit">大卡</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-chart-line"></i> 本週赤字</div>
+      <div class="metric-value ${wDef >= 0 ? 'green' : 'red'}">${wLogged ? (wDef >= 0 ? '+' : '') + Math.round(wDef).toLocaleString() : '—'} <span class="unit">大卡</span></div>
+    </div>
+  `;
+}
+
+function renderChart() {
+  const goal = getGoal();
+  const days = getDays();
+  const data = getData();
+  const labels = [], intakes = [], exercises = [], goals = [], colors = [];
+  for (let d = 1; d <= days; d++) {
+    labels.push(`${d}`);
+    const rec = data[dk(d)];
+    const cal = rec?.cal ?? null;
+    const exer = rec?.exer ?? null;
+    intakes.push(cal);
+    exercises.push(exer);
+    goals.push(goal);
+    colors.push(cal === null ? 'rgba(180,178,169,0.2)' : (cal - (exer||0)) > goal ? '#E24B4A' : '#378ADD');
+  }
+  if (chart) { chart.destroy(); chart = null; }
+  chart = new Chart(document.getElementById('mainChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '攝取熱量', data: intakes, backgroundColor: colors, borderRadius: 4, order: 3 },
+        { label: '運動消耗', data: exercises, backgroundColor: 'rgba(123,94,167,0.55)', borderRadius: 4, order: 2 },
+        { label: '目標熱量', data: goals, type: 'line', borderColor: '#888780', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, fill: false, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw !== null ? ctx.raw.toLocaleString() + ' 大卡' : '未記錄') } }
+      },
+      scales: {
+        x: { ticks: { font: { size: 11 }, autoSkip: true, maxRotation: 0 }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, callback: v => v.toLocaleString() }, grid: { color: 'rgba(136,135,128,0.1)' }, suggestedMin: 0 }
+      }
+    }
+  });
+}
+
+function renderWeekSummaries() {
+  const goal = getGoal();
+  const days = getDays();
+  const data = getData();
+  const weeks = [];
+  let week = [];
+  for (let d = 1; d <= days; d++) {
+    week.push(d);
+    if (new Date(viewYear, viewMonth, d).getDay() === 6 || d === days) { weeks.push([...week]); week = []; }
+  }
+  let html = '';
+  weeks.forEach((wk, wi) => {
+    let wCal = 0, wExer = 0, wDef = 0, wLogged = 0;
+    wk.forEach(d => {
+      const rec = data[dk(d)];
+      if (rec && (rec.cal || rec.exer)) {
+        wCal += rec.cal||0; wExer += rec.exer||0;
+        wDef += calcDeficit(goal, rec.cal||0, rec.exer||0); wLogged++;
+      }
+    });
+    const defR = Math.round(wDef);
+    html += `<div class="week-summary">
+      <div class="week-title">第 ${wi+1} 週 &nbsp; ${viewMonth+1}/${wk[0]} – ${viewMonth+1}/${wk[wk.length-1]}</div>
+      <div class="week-stats">
+        <div class="week-stat">已記錄 <span>${wLogged} / ${wk.length} 天</span></div>
+        ${wLogged ? `<div class="week-stat">飲食攝取 <span>${wCal.toLocaleString()} 大卡</span></div>` : ''}
+        ${wExer ? `<div class="week-stat">運動消耗 <span style="color:var(--purple)">${wExer.toLocaleString()} 大卡</span></div>` : ''}
+        ${wLogged ? `<div class="week-stat">週赤字 <span class="${defR >= 0 ? 'pos' : 'neg'}">${defR >= 0 ? '+' : ''}${defR.toLocaleString()} 大卡</span></div>` : '<div class="week-stat" style="color:var(--text3)">尚無記錄</div>'}
+      </div>
+    </div>`;
+  });
+  document.getElementById('weekSummaries').innerHTML = html;
+}
+
+function renderLog() {
+  const goal = getGoal();
+  const days = getDays();
+  const data = getData();
+  let html = '';
+  for (let d = 1; d <= days; d++) {
+    const rec = data[dk(d)] || {};
+    const cal = rec.cal;
+    const exer = rec.exer;
+    const dow = new Date(viewYear, viewMonth, d).getDay();
+    const hasData = cal !== undefined || exer !== undefined;
+    const diff = hasData ? calcDeficit(goal, cal||0, exer||0) : null;
+    const netCal = hasData ? (cal||0) - (exer||0) : null;
+    const badge = diff !== null
+      ? `<div class="deficit-badge ${diff > 0 ? 'deficit' : diff < 0 ? 'surplus' : 'neutral'}">${diff > 0 ? '赤字 +' : diff < 0 ? '超標 ' : '達標 '}${diff !== 0 ? Math.abs(diff).toLocaleString() + ' 大卡' : ''}</div>`
+      : '';
+    const netRow = netCal !== null ? `<div class="net-row">淨攝取 <span>${netCal.toLocaleString()}</span> 大卡</div>` : '';
+    html += `<div class="day-card" id="card-${d}">
+      <div class="day-header">
+        <span class="day-name">${viewMonth+1}/${d}</span>
+        <span class="day-dow">${DAY_NAMES[dow]}</span>
+      </div>
+      <div class="input-group">
+        <label><i class="ti ti-fork-knife" style="color:#BA7517;"></i> 飲食</label>
+        <input type="number" min="0" max="9999" placeholder="攝取熱量"
+          value="${cal !== undefined ? cal : ''}"
+          oninput="setDay(${d}, 'cal', this.value)"
+          aria-label="${viewMonth+1}月${d}日飲食攝取熱量">
+        <span class="unit">大卡</span>
+      </div>
+      <div class="input-group">
+        <label><i class="ti ti-run" style="color:#7B5EA7;"></i> 運動</label>
+        <input type="number" min="0" max="9999" placeholder="消耗熱量"
+          value="${exer !== undefined ? exer : ''}"
+          oninput="setDay(${d}, 'exer', this.value)"
+          aria-label="${viewMonth+1}月${d}日運動消耗熱量">
+        <span class="unit">大卡</span>
+      </div>
+      ${netRow}${badge}
+    </div>`;
+  }
+  document.getElementById('logGrid').innerHTML = html;
+}
+
+function setDay(d, field, val) {
+  const n = parseInt(val);
+  const data = getData();
+  if (!data[dk(d)]) data[dk(d)] = {};
+  if (!val || isNaN(n) || n <= 0) { delete data[dk(d)][field]; }
+  else { data[dk(d)][field] = n; }
+  if (!data[dk(d)].cal && !data[dk(d)].exer) delete data[dk(d)];
+  saveData(data);
+  renderMetrics();
+  renderChart();
+  renderWeekSummaries();
+  const card = document.getElementById(`card-${d}`);
+  if (!card) return;
+  const goal = getGoal();
+  const rec = data[dk(d)] || {};
+  const hasData = rec.cal !== undefined || rec.exer !== undefined;
+  const diff = hasData ? calcDeficit(goal, rec.cal||0, rec.exer||0) : null;
+  const netCal = hasData ? (rec.cal||0) - (rec.exer||0) : null;
+  const oldBadge = card.querySelector('.deficit-badge');
+  const oldNet = card.querySelector('.net-row');
+  if (oldBadge) oldBadge.remove();
+  if (oldNet) oldNet.remove();
+  if (netCal !== null) {
+    const netEl = document.createElement('div');
+    netEl.className = 'net-row';
+    netEl.innerHTML = `淨攝取 <span>${netCal.toLocaleString()}</span> 大卡`;
+    card.appendChild(netEl);
+  }
+  if (diff !== null) {
+    const badge = document.createElement('div');
+    badge.className = `deficit-badge ${diff > 0 ? 'deficit' : diff < 0 ? 'surplus' : 'neutral'}`;
+    badge.textContent = (diff > 0 ? '赤字 +' : diff < 0 ? '超標 ' : '達標 ') + (diff !== 0 ? Math.abs(diff).toLocaleString() + ' 大卡' : '');
+    card.appendChild(badge);
+  }
+}
+
+updateAll();
+</script>
+</body>
+</html>
